@@ -16,7 +16,7 @@ import { extractErrors, makeTag } from "./lib/utils.js";
 import getGitAuthUrl from "./lib/get-git-auth-url.js";
 import getBranches from "./lib/branches/index.js";
 import getLogger from "./lib/get-logger.js";
-import { addNote, getGitHead, getTagHead, isBranchUpToDate, push, pushNotes, tag, verifyPush, verifyPull } from "./lib/git.js";
+import { addNote, getGitHead, getTagHead, isBranchUpToDate, push, pushNotes, tag, verifyPush, verifyFetch } from "./lib/git.js";
 import getError from "./lib/get-error.js";
 import { COMMIT_EMAIL, COMMIT_NAME } from "./lib/definitions/constants.js";
 
@@ -85,7 +85,7 @@ async function run(context, plugins) {
 
   try {
     try {
-      await verifyPull(options.repositoryUrl, context.branch.name, { cwd, env });
+      await verifyFetch(options.repositoryUrl, context.branch.name, { cwd, env });
       if (!options.skipTagPush) {
         logger.warn(`Skipping verification of git push permissions with skip-tag-push enabled`);
         await verifyPush(options.repositoryUrl, context.branch.name, { cwd, env });
