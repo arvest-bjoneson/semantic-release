@@ -16,7 +16,7 @@ import { extractErrors, makeTag } from "./lib/utils.js";
 import getGitAuthUrl from "./lib/get-git-auth-url.js";
 import getBranches from "./lib/branches/index.js";
 import getLogger from "./lib/get-logger.js";
-import { addNote, getGitHead, getTagHead, isBranchUpToDate, push, pushNotes, tag, verifyAuth } from "./lib/git.js";
+import { addNote, getGitHead, getTagHead, isBranchUpToDate, push, pushNotes, tag, verifyPush, verifyPull } from "./lib/git.js";
 import getError from "./lib/get-error.js";
 import { COMMIT_EMAIL, COMMIT_NAME } from "./lib/definitions/constants.js";
 
@@ -83,15 +83,29 @@ async function run(context, plugins) {
     }`
   );
 
+  try {
+    try {
+      await verifyPull(options.repositoryUrl, context.branch.name, { cwd, env });
+      if (!options.skipTagPush) {
+        logger.warn(`Skipping verification of git push permissions with skip-tag-push enabled`);
+        await verifyPush(options.repositoryUrl, context.branch.name, { cwd, env });
+      }
+    } catch (error) {
+      if (!(await isBranchUpToDate(options.repositoryUrl, context.branch.name, { cwd, env }))) {
+        logger.log(
+          `The local branch ${context.branch.name} is behind the remote one, therefore a new version won't be published.`
+        );
+        return false;
+      }
 
-  if (!(await isBranchUpToDate(options.repositoryUrl, context.branch.name, { cwd, env }))) {
-    logger.log(
-      `The local branch ${context.branch.name} is behind the remote one, therefore a new version won't be published.`
-    );
-    return false;
+      throw error;
+    }
+  } catch (error) {
+    logger.error(`The command "${error.command}" failed with the error message ${error.stderr}.`);
+    throw getError("EGITNOPERMISSION", context);
   }
 
-  logger.success(`Allowed to push to the Git repository`);
+  logger.success(`Git repository access confirmed`);
 
   await plugins.verifyConditions(context);
 
@@ -110,8 +124,8 @@ async function run(context, plugins) {
       const commits = await getCommits({ ...context, lastRelease, nextRelease });
       nextRelease.notes = await plugins.generateNotes({ ...context, commits, lastRelease, nextRelease });
 
-      if (options.dryRun) {
-        logger.warn(`Skip ${nextRelease.gitTag} tag creation in dry-run mode`);
+      if (options.dryRun || options.skipTagPush) {
+        logger.warn(`Skipping ${nextRelease.gitTag} tag creation ${options.dryRun ? "in dry-run mode" : "with skip-tag-push enabled"}`);
       } else {
         await addNote({ channels: [...currentRelease.channels, nextRelease.channel] }, nextRelease.gitTag, {
           cwd,
@@ -191,8 +205,8 @@ async function run(context, plugins) {
 
   await plugins.prepare(context);
 
-  if (options.dryRun) {
-    logger.warn(`Skip ${nextRelease.gitTag} tag creation in dry-run mode`);
+  if (options.dryRun || options.skipTagPush) {
+    logger.warn(`Skip ${nextRelease.gitTag} tag creation ${options.dryRun ? "in dry-run mode" : "with skip-tag-push enabled"}`);
   } else {
     // Create the tag before calling the publish plugins as some require the tag to exists
     await tag(nextRelease.gitTag, nextRelease.gitHead, { cwd, env });

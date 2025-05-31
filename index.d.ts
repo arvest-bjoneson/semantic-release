@@ -668,6 +668,12 @@ declare module "semantic-release" {
     dryRun?: boolean | undefined;
 
     /**
+     * Set to true to skip pushing release tag via git
+     * This allows for plugins to handle tagging (i.e. GitLab releases)
+     */
+    skipTagPush?: boolean | undefined;
+
+    /**
      * Set to false to skip Continuous Integration environment verifications.
      * This allows for making releases from a local machine.
      */
