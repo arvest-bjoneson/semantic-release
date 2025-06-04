@@ -16,7 +16,17 @@ import { extractErrors, makeTag } from "./lib/utils.js";
 import getGitAuthUrl from "./lib/get-git-auth-url.js";
 import getBranches from "./lib/branches/index.js";
 import getLogger from "./lib/get-logger.js";
-import { addNote, getGitHead, getTagHead, isBranchUpToDate, push, pushNotes, tag, verifyPush } from "./lib/git.js";
+import {
+  addNote,
+  getGitHead,
+  getTagHead,
+  isBranchInSync,
+  isBranchUpToDate,
+  push,
+  pushNotes,
+  tag,
+  verifyPush,
+} from "./lib/git.js";
 import getError from "./lib/get-error.js";
 import { COMMIT_EMAIL, COMMIT_NAME } from "./lib/definitions/constants.js";
 
@@ -82,9 +92,11 @@ async function run(context, plugins) {
       `The local branch ${context.branch.name} is behind the remote one, therefore a new version won't be published.`
     );
     return false;
+  } else if (options.skipPush && !(await isBranchInSync(options.repositoryUrl, context.branch.name, { cwd, env }))) {
+    logger.warn(`The local branch ${context.branch.name} is ahead of the remote and skipPush is enabled`);
+  } else {
+    logger.success(`Local branch is up to date with the remote repository`);
   }
-
-  logger.success(`Local branch is up to date with the remote repository`);
 
   if (options.skipPush) {
     logger.warn(`Skipping git push verification with skip-push enabled`);
