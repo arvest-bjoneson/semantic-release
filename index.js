@@ -86,14 +86,17 @@ async function run(context, plugins) {
 
   logger.success(`Local branch is up to date with the remote repository`);
 
-  try {
-    await verifyPush(options.repositoryUrl, context.branch.name, { cwd, env });
-  } catch (error) {
-    logger.error(`The command "${error.command}" failed with the error message ${error.stderr}.`);
-    throw getError("EGITNOPERMISSION", context);
+  if (options.skipPush) {
+    logger.warn(`Skipping git push verification with skip-push enabled`);
+  } else {
+    try {
+      await verifyPush(options.repositoryUrl, context.branch.name, { cwd, env });
+    } catch (error) {
+      logger.error(`The command "${error.command}" failed with the error message ${error.stderr}.`);
+      throw getError("EGITNOPERMISSION", context);
+    }
+    logger.success(`Allowed to push to the Git repository`);
   }
-
-  logger.success(`Allowed to push to the Git repository`);
 
   logger[options.dryRun ? "warn" : "success"](
     `Run automated release from branch ${ciBranch} on repository ${options.originalRepositoryURL}${
@@ -125,11 +128,15 @@ async function run(context, plugins) {
           cwd,
           env,
         });
-        await push(options.repositoryUrl, { cwd, env });
-        await pushNotes(options.repositoryUrl, nextRelease.gitTag, {
-          cwd,
-          env,
-        });
+        if (options.skipPush) {
+          logger.warn(`Skip ${nextRelease.gitTag} tag push with skipPush enabled`);
+        } else {
+          await push(options.repositoryUrl, { cwd, env });
+          await pushNotes(options.repositoryUrl, nextRelease.gitTag, {
+            cwd,
+            env,
+          });
+        }
         logger.success(
           `Add ${nextRelease.channel ? `channel ${nextRelease.channel}` : "default channel"} to tag ${
             nextRelease.gitTag
@@ -205,8 +212,12 @@ async function run(context, plugins) {
     // Create the tag before calling the publish plugins as some require the tag to exists
     await tag(nextRelease.gitTag, nextRelease.gitHead, { cwd, env });
     await addNote({ channels: [nextRelease.channel] }, nextRelease.gitTag, { cwd, env });
-    await push(options.repositoryUrl, { cwd, env });
-    await pushNotes(options.repositoryUrl, nextRelease.gitTag, { cwd, env });
+    if (options.skipPush) {
+      logger.warn(`Skip ${nextRelease.gitTag} tag push with skipPush enabled`);
+    } else {
+      await push(options.repositoryUrl, { cwd, env });
+      await pushNotes(options.repositoryUrl, nextRelease.gitTag, { cwd, env });
+    }
     logger.success(`Created tag ${nextRelease.gitTag}`);
   }
 
@@ -214,6 +225,9 @@ async function run(context, plugins) {
   context.releases.push(...releases);
 
   await plugins.success({ ...context, releases });
+
+  if (options.skipPush) {
+  }
 
   logger.success(
     `Published release ${nextRelease.version} on ${nextRelease.channel ? nextRelease.channel : "default"} channel`
